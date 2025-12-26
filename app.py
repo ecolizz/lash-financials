@@ -167,8 +167,50 @@ if sales_file and exp_file and run_btn:
 
         with tab2:
             st.subheader("Business Analytics")
-            fig, ax = plt.subplots(figsize=(10, 5))
-            df_exp.groupby('Category')['Amount'].sum().plot(kind='pie', autopct='%1.1f%%', colors=[COLORS["pink"], COLORS["blue"], COLORS["yellow"]])
+            
+            # Setup Matplotlib for Comic Sans style
+            plt.rcParams['font.family'] = 'sans-serif'
+            plt.rcParams['font.sans-serif'] = ['Comic Sans MS', 'Arial']
+            
+            # Increase figure size and set background color
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7), facecolor=COLORS["light_bg"])
+            
+            # --- BAR CHART: TOP 5 VENDORS ---
+            top_v = df_exp.groupby('Vendor')['Amount'].sum().sort_values(ascending=False).head(5)
+            # Wrap vendor names
+            wrapped_v = [textwrap.fill(str(label), width=12) for label in top_v.index]
+            
+            bar_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], COLORS["teal"]]
+            top_v.plot(kind='bar', ax=ax1, color=bar_colors, edgecolor='#ccc')
+            
+            ax1.set_facecolor(COLORS["report_bg"]) # Light cyan background
+            ax1.set_title("Top 5 Vendor Spend", color=COLORS["text"], fontsize=14, fontweight='bold')
+            ax1.set_ylabel("USD ($)", color=COLORS["text"])
+            ax1.set_xlabel("Vendor", color=COLORS["text"])
+            ax1.set_xticklabels(wrapped_v, rotation=30, ha='right', fontsize=9, color=COLORS["text"])
+            ax1.tick_params(colors=COLORS["text"])
+
+            # --- PIE CHART: CATEGORY BREAKDOWN ---
+            if not df_exp.empty:
+                exp_breakdown = df_exp.groupby('Category')['Amount'].sum()
+                pie_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], 
+                              COLORS["green"], COLORS["red"], COLORS["teal"]]
+                
+                # Wrap category names
+                pie_labels = [textwrap.fill(str(label), width=15) for label in exp_breakdown.index]
+                
+                wedges, texts, autotexts = ax2.pie(
+                    exp_breakdown, 
+                    labels=pie_labels, 
+                    autopct='%1.1f%%',
+                    colors=pie_colors,
+                    startangle=140,
+                    textprops={'color': COLORS["text"], 'fontsize': 9}
+                )
+                plt.setp(autotexts, size=8, weight="bold")
+                ax2.set_title("Expense Breakdown by Category", color=COLORS["text"], fontsize=14, fontweight='bold')
+            
+            fig.tight_layout()
             st.pyplot(fig)
 
         with tab3:
@@ -232,11 +274,12 @@ if sales_file and exp_file and run_btn:
             tax_txt += f"ESTIMATED TAKE-HOME:              ${net_profit - total_tax:,.2f}\n"
 
             # Render in the stylized yellow box
+            # Note: Ensure the variable tax_txt is defined before this
             st.markdown(f"""
-                <div style="background-color: #FFFACD; border: 1px solid #ccc; padding: 20px; font-family: 'Courier New', Courier, monospace; color: #4B0082; white-space: pre; border-radius: 5px;">
+<div style="background-color: #FFFACD; border: 1px solid #ccc; padding: 20px; font-family: 'Courier New', Courier, monospace; color: #4B0082; white-space: pre; border-radius: 5px;">
 {tax_txt}
-                </div>
-            """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
             
     except Exception as e:
         st.error(f"Error: {e}")
