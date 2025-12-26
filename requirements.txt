@@ -1,5 +1,5 @@
-streamlit
+flask
 pandas
-matplotlib
-xlsxwriter
 openpyxl
+matplotlib
+gunicorn
