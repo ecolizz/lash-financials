@@ -37,7 +37,7 @@ st.markdown(f"""
         overflow-x: auto;
     }}
     </style>
-    """, unsafe_allow_index=True)
+    """, unsafe_allow_html=True)
 
 # --- APP LOGIC FUNCTIONS ---
 def format_line(desc, amount, pct=""):
@@ -120,7 +120,7 @@ if sales_file and exp_file:
                 rep += format_line("TOTAL REVENUE", f"{total_rev:,.2f}", "100%")
                 rep += f"╚{'═'*42}╩{'═'*17}╩{'═'*12}╝\n"
                 
-                st.markdown(f'<div class="report-box">{rep}</div>', unsafe_allow_index=True)
+                st.markdown(f'<div class="report-box">{rep}</div>', unsafe_allow_html=True)
 
             with col2:
                 st.subheader("Export")
