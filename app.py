@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
-import io
+import io, xlsxwriter
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Custom Lash Therapy: Financials", layout="wide")
