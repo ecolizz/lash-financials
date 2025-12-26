@@ -1,156 +1,169 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import textwrap
+import datetime
+import io
 
-# --- PAGE CONFIG ---
-st.set_page_config(page_title="Custom Lash Therapy", layout="wide")
+# --- PAGE CONFIGURATION ---
+st.set_page_config(page_title="Custom Lash Therapy: Financials", layout="wide")
 
-# Lisa Frank Palette
+# --- LISA FRANK THEME COLORS (Applied via Custom CSS) ---
 COLORS = {
-    "pink": "#FF69B4",
-    "purple": "#9370DB",
-    "blue": "#40E0D0",
-    "yellow": "#FFD700",
-    "green": "#71d411",
-    "red": "#DC143C",
-    "light_bg": "#F0F8FF",
-    "dark_bg": "#8A2BE2",
-    "text": "#4B0082",
-    "report_bg": "#E0FFFF",
-    "tax_bg": "#FFFACD",
-    "teal": "#00CED1"
+    "pink": "#FF69B4", "purple": "#9370DB", "blue": "#40E0D0",
+    "yellow": "#FFD700", "green": "#71d411", "red": "#DC143C",
+    "light_bg": "#F0F8FF", "text": "#4B0082", "teal": "#00CED1"
 }
 
-# Global Styling
 st.markdown(f"""
     <style>
-    .stApp {{ background-color: {COLORS['light_bg']}; }}
-    h1, h2, h3 {{ color: {COLORS['dark_bg']}; font-family: 'Comic Sans MS', cursive; }}
-    .stButton>button {{ 
-        background-color: {COLORS['pink']}; 
-        color: white; 
-        border-radius: 20px;
-        font-weight: bold;
-        width: 100%;
+    .main {{ background-color: {COLORS["light_bg"]}; color: {COLORS["text"]}; }}
+    h1, h2, h3 {{ color: {COLORS["purple"]}; font-family: 'Comic Sans MS'; }}
+    .stButton>button {{
+        background-color: {COLORS["pink"]}; color: white; border-radius: 10px;
+        font-weight: bold; border: 2px solid {COLORS["purple"]};
+    }}
+    .report-box {{
+        background-color: white; border: 2px solid {COLORS["blue"]};
+        padding: 20px; border-radius: 10px; font-family: 'Courier New';
     }}
     </style>
     """, unsafe_allow_html=True)
 
-def format_line(desc, amount, pct=""):
-    return f"║ {desc:<40} ║ {amount:>15} ║ {pct:>10} ║\n"
+# --- HELPER FUNCTIONS ---
+def parse_expenses(df):
+    """Refined parsing logic for the specific expense report format."""
+    expenses_list = []
+    curr_cat = None
+    for i, row in df.iterrows():
+        c0 = str(row[0]).strip()
+        if not c0 or c0 == "nan" or c0 == "Vendor" or "Report" in c0 or "Total" in c0:
+            # Check if next row defines a category
+            if i + 1 < len(df) and str(df.iloc[i+1, 0]) == "Vendor":
+                curr_cat = c0
+            continue
+        
+        if curr_cat:
+            try:
+                # Assuming standard positioning from your Tkinter logic
+                amount_val = float(str(row[3]).replace(',', '').replace('$', ''))
+                date_val = pd.to_datetime(row[2], errors='coerce')
+                if not pd.isna(date_val):
+                    expenses_list.append({'Category': curr_cat, 'Vendor': c0, 'Date': date_val, 'Amount': amount_val})
+            except:
+                continue
+    return pd.DataFrame(expenses_list)
 
-# --- SIDEBAR ---
+# --- APP LOGIC ---
+st.title("💖 Custom Lash Therapy: Tax Suite")
+
+# Sidebar for Inputs
 with st.sidebar:
-    st.title("💖 App Settings")
-    fed_rate = st.number_input("Fed Income Tax Est (%)", value=12.0)
-    local_rate = st.number_input("Hanover EIT Local (%)", value=1.0)
-    include_tips = st.checkbox("Include Tips", value=True)
+    st.header("⚙️ Configuration")
+    fed_rate = st.number_input("Fed Income Tax Est (%)", value=12.0, step=0.5)
+    local_rate = st.number_input("Hanover EIT Local (%)", value=1.0, step=0.1)
+    include_tips = st.checkbox("Include Tips in Revenue", value=True)
     
     st.divider()
-    st.subheader("📂 Data Import")
     sales_file = st.file_uploader("Upload Sales File", type=['csv', 'xlsx'])
     exp_file = st.file_uploader("Upload Expenses File", type=['csv', 'xlsx'])
-    run_btn = st.button("🎨 GENERATE REPORT")
 
-if sales_file and exp_file and run_btn:
-    try:
-        # 1. LOAD DATA
-        if sales_file.name.endswith('.csv'):
-            s_df = pd.read_csv(sales_file, header=None)
-        else:
-            s_df = pd.read_excel(sales_file, header=None)
-            
-        sales_summary = {str(row[0]).strip(): float(row[1]) for _, row in s_df.iterrows() if str(row[0]).strip() and not pd.isna(row[1])}
+# Tabs for Organization
+tab1, tab2, tab3 = st.tabs(["📊 P&L Report", "📈 Analytics", "💸 Tax Estimator"])
 
-        if exp_file.name.endswith('.csv'):
-            e_df = pd.read_csv(exp_file, header=None)
-        else:
-            e_df = pd.read_excel(exp_file, header=None)
-            
-        expenses_list = []
-        curr_cat = None
-        for i, row in e_df.iterrows():
-            c0 = str(row[0]).strip()
-            if c0 in ["Total", "Total Expenses", "Vendor", "nan"]: 
-                continue
-            if i + 1 < len(e_df) and str(e_df.iloc[i+1, 0]) == "Vendor": 
-                curr_cat = c0
-            elif curr_cat:
-                try:
-                    amt_val = float(str(row[3]).replace(',', '').replace('$', ''))
-                    expenses_list.append({'Category': curr_cat, 'Vendor': row[0], 'Amount': amt_val})
-                except: 
-                    pass
-        df_exp = pd.DataFrame(expenses_list)
+if sales_file and exp_file:
+    # Load Data
+    s_df = pd.read_csv(sales_file, header=None) if sales_file.name.endswith('.csv') else pd.read_excel(sales_file, header=None)
+    sales_summary = {str(row[0]).strip(): float(row[1]) for _, row in s_df.iterrows() if str(row[0]).strip() and not pd.isna(row[1])}
+    
+    e_raw_df = pd.read_csv(exp_file, header=None) if exp_file.name.endswith('.csv') else pd.read_excel(exp_file, header=None)
+    df_exp = parse_expenses(e_raw_df)
 
-        # 2. CALCULATIONS
-        net_sales = sales_summary.get('Net Sales', 0)
-        gratuity = sales_summary.get('Gratuity', 0)
-        tax_collected = sales_summary.get('Tax', 0)
-        prepayments = sales_summary.get('Prepayments For Future Sales', 0)
-        total_rev = net_sales + tax_collected + prepayments + (gratuity if include_tips else 0)
+    # --- CALCULATIONS ---
+    net_sales = sales_summary.get('Net Sales', 0)
+    gratuity = sales_summary.get('Gratuity', 0)
+    tax_collected = sales_summary.get('Tax', 0)
+    prepayments = sales_summary.get('Prepayments For Future Sales', 0)
+    
+    total_rev = net_sales + tax_collected + prepayments
+    if include_tips: total_rev += gratuity
+    
+    cogs_cats = ['Back Bar', 'Inventory']
+    total_cogs = df_exp[df_exp['Category'].isin(cogs_cats)]['Amount'].sum()
+    
+    processing_fees = abs(sales_summary.get('Payment Processing Fees Paid By Business', 0))
+    total_opex = df_exp[~df_exp['Category'].isin(cogs_cats)]['Amount'].sum() + processing_fees + tax_collected
+    
+    net_profit = total_rev - total_cogs - total_opex
+
+    # --- TAB 1: P&L ---
+    with tab1:
+        st.subheader("Profit & Loss Statement")
         
-        processing_fees = abs(sales_summary.get('Payment Processing Fees Paid By Business', 0))
-        total_cogs = df_exp[df_exp['Category'].isin(['Back Bar', 'Inventory'])]['Amount'].sum()
-        total_opex = df_exp[~df_exp['Category'].isin(['Back Bar', 'Inventory'])]['Amount'].sum() + processing_fees + tax_collected
-        net_profit = total_rev - total_cogs - total_opex
+        # Prepare Dataframe for display
+        pnl_data = [
+            {"Description": "REVENUE", "Amount": None},
+            {"Description": "  Net Sales", "Amount": net_sales},
+            {"Description": "  Tax Collected", "Amount": tax_collected},
+            {"Description": "  Prepayments", "Amount": prepayments}
+        ]
+        if include_tips: pnl_data.append({"Description": "  Tips/Gratuity", "Amount": gratuity})
+        pnl_data.append({"Description": "TOTAL REVENUE", "Amount": total_rev})
+        pnl_data.append({"Description": "TOTAL COGS", "Amount": total_cogs})
+        pnl_data.append({"Description": "TOTAL OPEX", "Amount": total_opex})
+        pnl_data.append({"Description": "NET PROFIT", "Amount": net_profit})
+        
+        pnl_df = pd.DataFrame(pnl_data)
+        pnl_df["% of Revenue"] = (pnl_df["Amount"] / total_rev * 100).round(1).astype(str) + '%'
+        
+        st.dataframe(pnl_df.fillna(""), use_container_width=True)
+        
+        # Excel Export
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            pnl_df.to_excel(writer, index=False, sheet_name='PNL')
+        st.download_button("Download P&L as Excel", data=output.getvalue(), file_name="pnl_report.xlsx")
 
-        # 3. TABS
-        tab1, tab2, tab3 = st.tabs(["📄 P&L Report", "📊 Analytics", "💰 Tax Estimator"])
-
-        with tab1:
-            st.subheader("Profit & Loss Statement")
-            last_pnl_data = [["Net Sales", net_sales, net_sales/total_rev if total_rev else 0],
-                             ["TOTAL REVENUE", total_rev, 1.0]]
-            rep = f"╔{'═'*42}╦{'═'*17}╦{'═'*12}╗\n"
-            for row in last_pnl_data:
-                rep += format_line(row[0], f"{row[1]:,.2f}", f"{(row[2]*100):.1f}%")
-            rep += f"╚{'═'*42}╩{'═'*17}╩{'═'*12}╝\n"
-            st.code(rep, language=None)
-
-        with tab2:
-            st.subheader("Business Analytics")
-            plt.rcParams['font.sans-serif'] = ['Comic Sans MS', 'Arial']
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), facecolor=COLORS["light_bg"])
+    # --- TAB 2: ANALYTICS ---
+    with tab2:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("Top 5 Vendor Spend")
+            top_v = df_exp.groupby('Vendor')['Amount'].sum().sort_values(ascending=False).head(5)
+            st.bar_chart(top_v, color=COLORS["pink"])
             
-            if not df_exp.empty:
-                top_v = df_exp.groupby('Vendor')['Amount'].sum().sort_values(ascending=False).head(5)
-                wrapped_v = [textwrap.fill(str(l), width=10) for l in top_v.index]
-                bar_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], COLORS["teal"]]
-                ax1.bar(wrapped_v, top_v.values, color=bar_colors, edgecolor='#ccc')
-                ax1.set_facecolor(COLORS["report_bg"])
-                ax1.set_title("Top 5 Vendor Spend", fontweight='bold', color=COLORS["text"])
-                ax1.set_ylabel("USD ($)", color=COLORS["text"])
-                ax1.tick_params(axis='x', rotation=30, labelsize=9)
-
-                exp_breakdown = df_exp.groupby('Category')['Amount'].sum()
-                pie_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], COLORS["green"], COLORS["red"]]
-                ax2.pie(exp_breakdown, labels=exp_breakdown.index, autopct='%1.1f%%', colors=pie_colors, startangle=140)
-                ax2.set_title("Expense Breakdown by Category", fontweight='bold', color=COLORS["text"])
-            
-            fig.tight_layout()
+        with col2:
+            st.write("Expense Breakdown")
+            exp_breakdown = df_exp.groupby('Category')['Amount'].sum()
+            fig, ax = plt.subplots(facecolor='none')
+            ax.pie(exp_breakdown, labels=exp_breakdown.index, autopct='%1.1f%%', colors=[COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["teal"]])
             st.pyplot(fig)
 
-        with tab3:
-            col_l, col_mid, col_r = st.columns([1, 2, 1])
-            with col_mid:
-                st.markdown(f"""
-                <div style="border: 2px solid {COLORS['purple']}; border-radius: 10px; padding: 20px; background-color: {COLORS['light_bg']}; margin-bottom: 20px;">
-                <h3 style="text-align: center; color: {COLORS['dark_bg']};">Tax Rate Settings</h3>
-                <p style="text-align: center; color: {COLORS['text']};">Fed Income Tax Est: {fed_rate}%<br>Hanover EIT Local: {local_rate}%</p>
-                </div>""", unsafe_allow_html=True)
-              
-            se_tax = (net_profit * 0.9235) * 0.153
-            total_tax = se_tax + (net_profit * 0.0307)
-            tax_txt = f"ESTIMATED TAX LIABILITY (HANOVER, PA)\n{'='*40}\nProfit: ${net_profit:,.2f}\nTotal Tax Due: ${total_tax:,.2f}"
+    # --- TAB 3: TAX ESTIMATOR ---
+    with tab3:
+        st.subheader("Estimated Tax Liability (Hanover, PA)")
+        
+        se_tax = (net_profit * 0.9235) * 0.153
+        fed_inc = max(0, net_profit - (se_tax * 0.5)) * (fed_rate/100)
+        pa_state = net_profit * 0.0307
+        pa_local = net_profit * (local_rate/100)
+        lst = 52.0 if net_profit > 12000 else 0
+        total_tax = se_tax + fed_inc + pa_state + pa_local + lst
+        
+        tax_report = f"""
+        Business Profit: ${net_profit:,.2f}
+        ------------------------------------------
+        Fed SE Tax (15.3%):        ${se_tax:,.2f}
+        Fed Income Tax ({fed_rate}%):  ${fed_inc:,.2f}
+        PA State Tax (3.07%):      ${pa_state:,.2f}
+        Hanover Local EIT ({local_rate}%):  ${pa_local:,.2f}
+        PA Local Services Tax:     ${lst:,.2f}
+        ==========================================
+        TOTAL ESTIMATED TAX DUE:   ${total_tax:,.2f}
+        ESTIMATED TAKE-HOME:       ${net_profit - total_tax:,.2f}
+        """
+        st.code(tax_report)
+        st.download_button("Save Tax Report (.txt)", tax_report, file_name="tax_estimate.txt")
 
-            st.markdown(f"""
-            <div style="background-color: #FFFACD; border: 1px solid #ccc; padding: 20px; font-family: 'Courier New', monospace; color: #4B0082; white-space: pre; border-radius: 5px;">
-            {tax_txt}
-            </div>""", unsafe_allow_html=True)
-
-    except Exception as e:
-        st.error(f"Error processing files: {e}")
 else:
-    st.info("👈 Upload files and click 'Generate Report' to start.")
+    st.info("👋 Welcome! Please upload your Sales and Expenses files in the sidebar to begin.")
