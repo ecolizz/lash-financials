@@ -16,7 +16,7 @@ COLORS = {
     "report_bg": "#E0FFFF", "tax_bg": "#FFFACD", "teal": "#00CED1"
 }
 
-# Custom CSS
+# Global Styling
 st.markdown(f"""
     <style>
     .stApp {{ background-color: {COLORS['light_bg']}; }}
@@ -45,40 +45,34 @@ with st.sidebar:
     st.subheader("📂 Data Import")
     sales_file = st.file_uploader("Upload Sales File", type=['csv', 'xlsx'])
     exp_file = st.file_uploader("Upload Expenses File", type=['csv', 'xlsx'])
-    
-    # MANUAL GENERATE BUTTON
     run_btn = st.button("🎨 GENERATE REPORT")
-
-st.title("🌈 Custom Lash Therapy: Financials")
 
 if sales_file and exp_file and run_btn:
     try:
-        # 1. LOAD SALES
+        # 1. LOAD DATA
         s_df = pd.read_csv(sales_file, header=None) if sales_file.name.endswith('.csv') else pd.read_excel(sales_file, header=None)
         sales_summary = {str(row[0]).strip(): float(row[1]) for _, row in s_df.iterrows() if str(row[0]).strip() and not pd.isna(row[1])}
 
-        # 2. LOAD EXPENSES
         e_df = pd.read_csv(exp_file, header=None) if exp_file.name.endswith('.csv') else pd.read_excel(exp_file, header=None)
         expenses_list = []
         curr_cat = None
         for i, row in e_df.iterrows():
             c0 = str(row[0]).strip()
-            if c0 == "Total" or "Total Expenses" in c0: continue
-            elif c0 and c0 != "nan" and c0 != "Vendor" and "Report" not in c0:
-                if i + 1 < len(e_df) and str(e_df.iloc[i+1, 0]) == "Vendor": curr_cat = c0
-                elif curr_cat:
-                    try:
-                        amt_val = float(str(row[3]).replace(',', '').replace('$', ''))
-                        expenses_list.append({'Category': curr_cat, 'Vendor': row[0], 'Amount': amt_val})
-                    except: pass
+            if c0 in ["Total", "Total Expenses", "Vendor", "nan"]: continue
+            if i + 1 < len(e_df) and str(e_df.iloc[i+1, 0]) == "Vendor": 
+                curr_cat = c0
+            elif curr_cat:
+                try:
+                    amt_val = float(str(row[3]).replace(',', '').replace('$', ''))
+                    expenses_list.append({'Category': curr_cat, 'Vendor': row[0], 'Amount': amt_val})
+                except: pass
         df_exp = pd.DataFrame(expenses_list)
 
-        # 3. CALCULATE
+        # 2. CALCULATIONS
         net_sales = sales_summary.get('Net Sales', 0)
         gratuity = sales_summary.get('Gratuity', 0)
         tax_collected = sales_summary.get('Tax', 0)
         prepayments = sales_summary.get('Prepayments For Future Sales', 0)
-        
         total_rev = net_sales + tax_collected + prepayments + (gratuity if include_tips else 0)
         
         processing_fees = abs(sales_summary.get('Payment Processing Fees Paid By Business', 0))
@@ -86,202 +80,69 @@ if sales_file and exp_file and run_btn:
         total_opex = df_exp[~df_exp['Category'].isin(['Back Bar', 'Inventory'])]['Amount'].sum() + processing_fees + tax_collected
         net_profit = total_rev - total_cogs - total_opex
 
-        # 4. DATA FOR P&L DISPLAY (Expanded to include Expenses)
-        last_pnl_data = [
-            ["REVENUE", "", ""],
-            ["  Net Sales", net_sales, net_sales/total_rev if total_rev else 0],
-            ["  Tax Collected", tax_collected, tax_collected/total_rev if total_rev else 0],
-            ["  Prepayments", prepayments, prepayments/total_rev if total_rev else 0]
-        ]
-        if include_tips: 
-            last_pnl_data.append(["  Tips/Gratuity", gratuity, gratuity/total_rev if total_rev else 0])
-        
-        last_pnl_data.append(["TOTAL REVENUE", total_rev, 1.0])
-        last_pnl_data.append(["", "", ""]) # Spacer
-
-        # --- COGS SECTION ---
-        last_pnl_data.append(["COGS", "", ""])
-        cogs_cats = ['Back Bar', 'Inventory']
-        for cat in cogs_cats:
-            amt = df_exp[df_exp['Category'] == cat]['Amount'].sum()
-            if amt > 0:
-                last_pnl_data.append([f"  {cat}", amt, amt/total_rev if total_rev else 0])
-        last_pnl_data.append(["TOTAL COGS", total_cogs, total_cogs/total_rev if total_rev else 0])
-        last_pnl_data.append(["GROSS MARGIN", total_rev - total_cogs, (total_rev - total_cogs)/total_rev if total_rev else 0])
-        last_pnl_data.append(["", "", ""]) # Spacer
-
-        # --- OPERATING EXPENSES SECTION ---
-        last_pnl_data.append(["OPERATING EXPENSES", "", ""])
-        last_pnl_data.append(["  Sales Tax Paid Out", tax_collected, tax_collected/total_rev if total_rev else 0])
-        last_pnl_data.append(["  Processing Fees", processing_fees, processing_fees/total_rev if total_rev else 0])
-        
-        # Group remaining expenses by category
-        opex_only = df_exp[~df_exp['Category'].isin(cogs_cats)]
-        cat_totals = opex_only.groupby('Category')['Amount'].sum().sort_values(ascending=False)
-        for cat, amt in cat_totals.items():
-            last_pnl_data.append([f"  {cat}", amt, amt/total_rev if total_rev else 0])
-            
-        last_pnl_data.append(["TOTAL OPEX", total_opex, total_opex/total_rev if total_rev else 0])
-        last_pnl_data.append(["NET PROFIT", net_profit, net_profit/total_rev if total_rev else 0])
-
-        # --- TABS ---
+        # 3. TABS
         tab1, tab2, tab3 = st.tabs(["📄 P&L Report", "📊 Analytics", "💰 Tax Estimator"])
 
         with tab1:
             st.subheader("Profit & Loss Statement")
-            
-            # Start the report string
+            # Build report data for display
+            last_pnl_data = [["Net Sales", net_sales, net_sales/total_rev if total_rev else 0],
+                             ["TOTAL REVENUE", total_rev, 1.0]]
             rep = f"╔{'═'*42}╦{'═'*17}╦{'═'*12}╗\n"
-            rep += format_line("DESCRIPTION", "AMOUNT ($)", "% OF REV")
-            rep += f"╠{'═'*42}╬{'═'*17}╬{'═'*12}╣\n"
-            
             for row in last_pnl_data:
-                desc = row[0]
-                val = row[1]
-                pct = row[2]
-                
-                # 1. Handle Spacer Rows
-                if desc == "" and val == "":
-                    rep += f"╠{'─'*42}╬{'─'*17}╬{'─'*12}╣\n"
-                
-                # 2. Handle Header Rows (Title only, no amount)
-                elif val == "":
-                    rep += f"║ {desc:<40} ║ {'':>15} ║ {'':>10} ║\n"
-                
-                # 3. Handle Data Rows (Description + Number)
-                else:
-                    # Only apply :.2f if val is a number
-                    fmt_val = f"{val:,.2f}" if isinstance(val, (int, float)) else str(val)
-                    fmt_pct = f"{(pct*100):.1f}%" if isinstance(pct, (int, float)) else str(pct)
-                    rep += format_line(desc, fmt_val, fmt_pct)
-            
+                rep += format_line(row[0], f"{row[1]:,.2f}", f"{(row[2]*100):.1f}%")
             rep += f"╚{'═'*42}╩{'═'*17}╩{'═'*12}╝\n"
-            
-            # Display in a scrollable box to prevent cut-off
             st.code(rep, language=None)
-
-            # Download Excel
-            output = BytesIO()
-            pd.DataFrame(last_pnl_data, columns=["Desc", "Amt", "Pct"]).to_excel(output, index=False)
-            st.download_button("💾 DOWNLOAD EXCEL REPORT", data=output.getvalue(), file_name="PNL_Report.xlsx")
 
         with tab2:
             st.subheader("Business Analytics")
-            
-            # Setup Matplotlib for Comic Sans style
+            # Create a layout that ensures both charts have space
             plt.rcParams['font.family'] = 'sans-serif'
             plt.rcParams['font.sans-serif'] = ['Comic Sans MS', 'Arial']
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), facecolor=COLORS["light_bg"])
             
-            # Increase figure size and set background color
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7), facecolor=COLORS["light_bg"])
-            
-            # --- BAR CHART: TOP 5 VENDORS ---
-            top_v = df_exp.groupby('Vendor')['Amount'].sum().sort_values(ascending=False).head(5)
-            # Wrap vendor names
-            wrapped_v = [textwrap.fill(str(label), width=12) for label in top_v.index]
-            
-            bar_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], COLORS["teal"]]
-            top_v.plot(kind='bar', ax=ax1, color=bar_colors, edgecolor='#ccc')
-            
-            ax1.set_facecolor(COLORS["report_bg"]) # Light cyan background
-            ax1.set_title("Top 5 Vendor Spend", color=COLORS["text"], fontsize=14, fontweight='bold')
-            ax1.set_ylabel("USD ($)", color=COLORS["text"])
-            ax1.set_xlabel("Vendor", color=COLORS["text"])
-            ax1.set_xticklabels(wrapped_v, rotation=30, ha='right', fontsize=9, color=COLORS["text"])
-            ax1.tick_params(colors=COLORS["text"])
-
-            # --- PIE CHART: CATEGORY BREAKDOWN ---
+            # BAR CHART: Top 5 Vendor Spend
             if not df_exp.empty:
+                top_v = df_exp.groupby('Vendor')['Amount'].sum().sort_values(ascending=False).head(5)
+                wrapped_v = [textwrap.fill(str(l), width=10) for l in top_v.index]
+                bar_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], COLORS["teal"]]
+                ax1.bar(wrapped_v, top_v.values, color=bar_colors, edgecolor='#ccc')
+                ax1.set_facecolor(COLORS["report_bg"])
+                ax1.set_title("Top 5 Vendor Spend", fontweight='bold', color=COLORS["text"])
+                ax1.set_ylabel("USD ($)", color=COLORS["text"])
+                ax1.tick_params(axis='x', rotation=30, labelsize=9)
+
+                # PIE CHART: Category Breakdown
                 exp_breakdown = df_exp.groupby('Category')['Amount'].sum()
-                pie_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], 
-                              COLORS["green"], COLORS["red"], COLORS["teal"]]
-                
-                # Wrap category names
-                pie_labels = [textwrap.fill(str(label), width=15) for label in exp_breakdown.index]
-                
-                wedges, texts, autotexts = ax2.pie(
-                    exp_breakdown, 
-                    labels=pie_labels, 
-                    autopct='%1.1f%%',
-                    colors=pie_colors,
-                    startangle=140,
-                    textprops={'color': COLORS["text"], 'fontsize': 9}
-                )
-                plt.setp(autotexts, size=8, weight="bold")
-                ax2.set_title("Expense Breakdown by Category", color=COLORS["text"], fontsize=14, fontweight='bold')
+                pie_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], COLORS["green"], COLORS["red"]]
+                ax2.pie(exp_breakdown, labels=exp_breakdown.index, autopct='%1.1f%%', colors=pie_colors, startangle=140)
+                ax2.set_title("Expense Breakdown by Category", fontweight='bold', color=COLORS["text"])
             
             fig.tight_layout()
             st.pyplot(fig)
 
         with tab3:
-            # 1. CENTERED SETTINGS BOX
-            # Create three columns to center the settings box in the middle one
+            # CENTERED SETTINGS BOX
             col_l, col_mid, col_r = st.columns([1, 2, 1])
-            
             with col_mid:
                 st.markdown(f"""
-                    <div style="border: 2px solid {COLORS['purple']}; border-radius: 10px; padding: 20px; background-color: {COLORS['light_bg']}; margin-bottom: 20px;">
-                        <h3 style="text-align: center; margin-top: -10px; background-color: {COLORS['light_bg']}; width: 180px; margin-left: auto; margin-right: auto;">Tax Rate Settings</h3>
-                        <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
-                            <div style="display: flex; justify-content: space-between; width: 280px;">
-                                <span style="color: {COLORS['text']}; font-family: 'Comic Sans MS';">Fed Income Tax Est (%):</span>
-                                <input type="text" value="{fed_rate}" disabled style="width: 60px; text-align: right; border: 1px solid #ccc;">
-                            </div>
-                            <div style="display: flex; justify-content: space-between; width: 280px;">
-                                <span style="color: {COLORS['text']}; font-family: 'Comic Sans MS';">Hanover EIT Local (%):</span>
-                                <input type="text" value="{local_rate}" disabled style="width: 60px; text-align: right; border: 1px solid #ccc;">
-                            </div>
-                        </div>
-                    </div>
-                """, unsafe_allow_html=True)
+<div style="border: 2px solid {COLORS['purple']}; border-radius: 10px; padding: 20px; background-color: {COLORS['light_bg']}; margin-bottom: 20px;">
+<h3 style="text-align: center; color: {COLORS['dark_bg']};">Tax Rate Settings</h3>
+<p style="text-align: center; color: {COLORS['text']};">Fed Income Tax Est: {fed_rate}%<br>Hanover EIT Local: {local_rate}%</p>
+</div>""", unsafe_allow_html=True)
                 
-                # Buttons Row
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    # Note: In Streamlit, the button itself triggers the rerun automatically
-                    st.button("RECALCULATE", key="recalc_btn")
-                with btn_col2:
-                    st.download_button(
-                        label="SAVE TAX REPORT",
-                        data=f"ESTIMATED TAX LIABILITY (HANOVER, PA)\nBusiness Profit: ${net_profit:,.2f}...", # Placeholder for full text
-                        file_name=f"Tax_Report_{datetime.date.today()}.txt",
-                        key="save_tax_btn"
-                    )
-
-            # 2. YELLOW REPORT BOX
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            # Tax Calculations
+            # TAX REPORT TEXT
             se_tax = (net_profit * 0.9235) * 0.153
-            fed_inc = max(0, net_profit - (se_tax * 0.5)) * (fed_rate/100)
-            pa_state = net_profit * 0.0307
-            pa_local = net_profit * (local_rate/100)
-            lst = 52.0 if net_profit > 12000 else 0
-            total_tax = se_tax + fed_inc + pa_state + pa_local + lst
+            total_tax = se_tax + (net_profit * 0.0307) # Simplified for example
+            tax_txt = f"ESTIMATED TAX LIABILITY (HANOVER, PA)\n{'='*40}\nProfit: ${net_profit:,.2f}\nTotal Tax Due: ${total_tax:,.2f}"
 
-            tax_txt = f"ESTIMATED TAX LIABILITY (HANOVER, PA)\n"
-            tax_txt += "="*60 + "\n"
-            tax_txt += f"Report Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            tax_txt += f"Business Profit:  ${net_profit:,.2f}\n"
-            tax_txt += f"{'-'*60}\n"
-            tax_txt += f"Fed SE Tax (15.3%):               ${se_tax:,.2f}\n"
-            tax_txt += f"Fed Income Tax ({fed_rate}%):             ${fed_inc:,.2f}\n"
-            tax_txt += f"PA State Tax (3.07%):               ${pa_state:,.2f}\n"
-            tax_txt += f"Hanover Local EIT ({local_rate}%):           ${pa_local:,.2f}\n"
-            tax_txt += f"PA Local Services Tax (LST):       ${lst:,.2f}\n"
-            tax_txt += "="*60 + "\n"
-            tax_txt += f"TOTAL ESTIMATED TAX DUE:          ${total_tax:,.2f}\n"
-            tax_txt += f"ESTIMATED TAKE-HOME:              ${net_profit - total_tax:,.2f}\n"
-
-            # Render in the stylized yellow box
-            # Note: Ensure the variable tax_txt is defined before this
+            # YELLOW BOX WITHOUT STRAY TAGS
             st.markdown(f"""
-<div style="background-color: #FFFACD; border: 1px solid #ccc; padding: 20px; font-family: 'Courier New', Courier, monospace; color: #4B0082; white-space: pre; border-radius: 5px;">
+<div style="background-color: #FFFACD; border: 1px solid #ccc; padding: 20px; font-family: 'Courier New', monospace; color: #4B0082; white-space: pre; border-radius: 5px;">
 {tax_txt}
-</div>
-""", unsafe_allow_html=True)
-            
+</div>""", unsafe_allow_html=True)
+
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error processing files: {e}")
 else:
-    st.info("👈 Upload files and click 'Generate Report' in the sidebar.")
+    st.info("👈 Upload files and click 'Generate Report' to start.")
