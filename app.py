@@ -124,9 +124,7 @@ if sales_file and exp_file and run_btn:
             col_l, col_mid, col_r = st.columns([1, 2, 1])
             with col_mid:
                 st.markdown(f"""
-<div style="border: 2px solid {COLORS['purple']}; 
-    border-radius: 10px; padding: 20px; 
-    background-color: {COLORS['light_bg']}; margin-bottom: 20px;">
+<div style="border: 2px solid {COLORS['purple']}; border-radius: 10px; padding: 20px; background-color: {COLORS['light_bg']}; margin-bottom: 20px;">
 <h3 style="text-align: center; color: {COLORS['dark_bg']};">Tax Rate Settings</h3>
 <p style="text-align: center; color: {COLORS['text']};">Fed Income Tax Est: {fed_rate}%<br>Hanover EIT Local: {local_rate}%</p>
 </div>""", unsafe_allow_html=True)
