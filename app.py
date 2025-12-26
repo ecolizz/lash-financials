@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
-import datetime
 import textwrap
-from io import BytesIO
 
 # --- PAGE CONFIG ---
 st.set_page_config(page_title="Custom Lash Therapy", layout="wide")
@@ -85,7 +83,6 @@ if sales_file and exp_file and run_btn:
 
         with tab1:
             st.subheader("Profit & Loss Statement")
-            # Build report data for display
             last_pnl_data = [["Net Sales", net_sales, net_sales/total_rev if total_rev else 0],
                              ["TOTAL REVENUE", total_rev, 1.0]]
             rep = f"╔{'═'*42}╦{'═'*17}╦{'═'*12}╗\n"
@@ -96,13 +93,12 @@ if sales_file and exp_file and run_btn:
 
         with tab2:
             st.subheader("Business Analytics")
-            # Create a layout that ensures both charts have space
-            plt.rcParams['font.family'] = 'sans-serif'
-            plt.rcParams['font.sans-serif'] = ['Comic Sans MS', 'Arial']
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8), facecolor=COLORS["light_bg"])
-            
-            # BAR CHART: Top 5 Vendor Spend
             if not df_exp.empty:
+                # Use subplots but allow streamlit to scale the figure
+                plt.rcParams['font.sans-serif'] = ['Arial'] # Standard font for better compatibility
+                fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5), facecolor=COLORS["light_bg"])
+                
+                # BAR CHART
                 top_v = df_exp.groupby('Vendor')['Amount'].sum().sort_values(ascending=False).head(5)
                 wrapped_v = [textwrap.fill(str(l), width=10) for l in top_v.index]
                 bar_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], COLORS["teal"]]
@@ -110,37 +106,37 @@ if sales_file and exp_file and run_btn:
                 ax1.set_facecolor(COLORS["report_bg"])
                 ax1.set_title("Top 5 Vendor Spend", fontweight='bold', color=COLORS["text"])
                 ax1.set_ylabel("USD ($)", color=COLORS["text"])
-                ax1.tick_params(axis='x', rotation=30, labelsize=9)
+                ax1.tick_params(axis='x', rotation=0, labelsize=8)
 
-                # PIE CHART: Category Breakdown
+                # PIE CHART
                 exp_breakdown = df_exp.groupby('Category')['Amount'].sum()
                 pie_colors = [COLORS["pink"], COLORS["purple"], COLORS["blue"], COLORS["yellow"], COLORS["green"], COLORS["red"]]
-                ax2.pie(exp_breakdown, labels=exp_breakdown.index, autopct='%1.1f%%', colors=pie_colors, startangle=140)
-                ax2.set_title("Expense Breakdown by Category", fontweight='bold', color=COLORS["text"])
-            
-            fig.tight_layout()
-            st.pyplot(fig)
+                ax2.pie(exp_breakdown, labels=exp_breakdown.index, autopct='%1.1f%%', colors=pie_colors, startangle=140, textprops={'fontsize': 8})
+                ax2.set_title("Expense Breakdown", fontweight='bold', color=COLORS["text"])
+                
+                fig.tight_layout()
+                # KEY FIX: use_container_width=True makes it fit the browser
+                st.pyplot(fig, use_container_width=True)
+            else:
+                st.warning("No expense data found to visualize.")
 
         with tab3:
-            # CENTERED SETTINGS BOX
             col_l, col_mid, col_r = st.columns([1, 2, 1])
             with col_mid:
                 st.markdown(f"""
-<div style="border: 2px solid {COLORS['purple']}; border-radius: 10px; padding: 20px; background-color: {COLORS['light_bg']}; margin-bottom: 20px;">
-<h3 style="text-align: center; color: {COLORS['dark_bg']};">Tax Rate Settings</h3>
-<p style="text-align: center; color: {COLORS['text']};">Fed Income Tax Est: {fed_rate}%<br>Hanover EIT Local: {local_rate}%</p>
-</div>""", unsafe_allow_html=True)
+                <div style="border: 2px solid {COLORS['purple']}; border-radius: 10px; padding: 20px; background-color: {COLORS['light_bg']}; margin-bottom: 20px;">
+                    <h3 style="text-align: center; color: {COLORS['dark_bg']}; margin-top:0;">Tax Rate Settings</h3>
+                    <p style="text-align: center; color: {COLORS['text']};">Fed Income Tax Est: {fed_rate}%<br>Hanover EIT Local: {local_rate}%</p>
+                </div>""", unsafe_allow_html=True)
                 
-            # TAX REPORT TEXT
             se_tax = (net_profit * 0.9235) * 0.153
-            total_tax = se_tax + (net_profit * 0.0307) # Simplified for example
+            total_tax = se_tax + (net_profit * 0.0307)
             tax_txt = f"ESTIMATED TAX LIABILITY (HANOVER, PA)\n{'='*40}\nProfit: ${net_profit:,.2f}\nTotal Tax Due: ${total_tax:,.2f}"
 
-            # YELLOW BOX WITHOUT STRAY TAGS
             st.markdown(f"""
-<div style="background-color: #FFFACD; border: 1px solid #ccc; padding: 20px; font-family: 'Courier New', monospace; color: #4B0082; white-space: pre; border-radius: 5px;">
+            <div style="background-color: #FFFACD; border: 1px solid #ccc; padding: 20px; font-family: 'Courier New', monospace; color: #4B0082; white-space: pre; border-radius: 5px;">
 {tax_txt}
-</div>""", unsafe_allow_html=True)
+            </div>""", unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Error processing files: {e}")
