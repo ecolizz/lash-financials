@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import datetime
-import io, xlsxwriter
+import io
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Custom Lash Therapy: Financials", layout="wide")
@@ -119,7 +119,7 @@ if sales_file and exp_file:
         
         # Excel Export
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        with pd.ExcelWriter(output) as writer:
             pnl_df.to_excel(writer, index=False, sheet_name='PNL')
         st.download_button("Download P&L as Excel", data=output.getvalue(), file_name="pnl_report.xlsx")
 
