@@ -104,32 +104,38 @@ if sales_file and exp_file:
         tab1, tab2, tab3 = st.tabs(["📄 P&L Report", "📊 Analytics", "💰 Tax Estimator"])
 
         with tab1:
-            col1, col2 = st.columns([3, 1])
-            with col1:
-                st.subheader("Profit & Loss Statement")
-                
-                # Build report text (similar to your format_line logic)
-                rep = f"╔{'═'*42}╦{'═'*17}╦{'═'*12}╗\n"
-                rep += format_line("DESCRIPTION", "AMOUNT ($)", "% OF REV")
-                rep += f"╠{'═'*42}╬{'═'*17}╬{'═'*12}╣\n"
-                
-                # Revenue section
-                rep += format_line("Net Sales", f"{net_sales:,.2f}", f"{(net_sales/total_rev*100):.1f}%" if total_rev else "0%")
-                if include_tips: rep += format_line("Tips/Gratuity", f"{gratuity:,.2f}", f"{(gratuity/total_rev*100):.1f}%")
-                rep += f"╠{'─'*42}╬{'─'*17}╬{'─'*12}╣\n"
-                rep += format_line("TOTAL REVENUE", f"{total_rev:,.2f}", "100%")
-                rep += f"╚{'═'*42}╩{'═'*17}╩{'═'*12}╝\n"
-                
-                st.markdown(f'<div class="report-box">{rep}</div>', unsafe_allow_html=True)
+            st.subheader("Profit & Loss Statement")
+            
+            # --- WEB-FRIENDLY TABLE ---
+            # We convert your list data into a clean table for the web
+            pnl_df = pd.DataFrame(
+                [row for row in last_pnl_data if row[0] and row[1] != ""], 
+                columns=["Description", "Amount ($)", "% of Total"]
+            )
+            st.dataframe(pnl_df, use_container_width=True, hide_index=True)
 
-            with col2:
-                st.subheader("Export")
-                # Excel Download
-                df_export = pd.DataFrame([["Total Revenue", total_rev], ["Total Expenses", total_opex + total_cogs], ["Net Profit", net_profit]], columns=["Item", "Amount"])
-                output = BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_export.to_excel(writer, index=False)
-                st.download_button("Download Excel Report", data=output.getvalue(), file_name="Hanover_Lash_Report.xlsx")
+            # --- THE BOXED REPORT (Optimized) ---
+            with st.expander("View Classic ASCII Report"):
+                # Use st.text instead of a div for better alignment and overflow
+                rep_header = f"╔{'═'*42}╦{'═'*17}╦{'═'*12}╗\n"
+                rep_header += format_line("DESCRIPTION", "AMOUNT ($)", "% OF REV")
+                rep_header += f"╠{'═'*42}╬{'═'*17}╬{'═'*12}╣\n"
+                
+                # Dynamic rows based on your analysis results
+                rep_body = ""
+                for row in last_pnl_data:
+                    if row[0] and row[1] != "":
+                        rep_body += format_line(row[0], f"{row[1]:,.2f}", f"{(row[2]*100):.1f}%")
+                
+                rep_footer = f"╚{'═'*42}╩{'═'*17}╩{'═'*12}╝\n"
+                
+                st.code(rep_header + rep_body + rep_footer, language=None)
+
+            # Download remains the same
+            output = BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                pnl_df.to_excel(writer, index=False)
+            st.download_button("Download Excel Report", data=output.getvalue(), file_name="PNL_Report.xlsx")
 
         with tab2:
             st.subheader("Visual Analytics")
