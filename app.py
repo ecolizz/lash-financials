@@ -172,13 +172,71 @@ if sales_file and exp_file and run_btn:
             st.pyplot(fig)
 
         with tab3:
-            st.subheader("Tax Liability")
+            # 1. CENTERED SETTINGS BOX
+            # Create three columns to center the settings box in the middle one
+            col_l, col_mid, col_r = st.columns([1, 2, 1])
+            
+            with col_mid:
+                st.markdown(f"""
+                    <div style="border: 2px solid {COLORS['purple']}; border-radius: 10px; padding: 20px; background-color: {COLORS['light_bg']}; margin-bottom: 20px;">
+                        <h3 style="text-align: center; margin-top: -10px; background-color: {COLORS['light_bg']}; width: 180px; margin-left: auto; margin-right: auto;">Tax Rate Settings</h3>
+                        <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
+                            <div style="display: flex; justify-content: space-between; width: 280px;">
+                                <span style="color: {COLORS['text']}; font-family: 'Comic Sans MS';">Fed Income Tax Est (%):</span>
+                                <input type="text" value="{fed_rate}" disabled style="width: 60px; text-align: right; border: 1px solid #ccc;">
+                            </div>
+                            <div style="display: flex; justify-content: space-between; width: 280px;">
+                                <span style="color: {COLORS['text']}; font-family: 'Comic Sans MS';">Hanover EIT Local (%):</span>
+                                <input type="text" value="{local_rate}" disabled style="width: 60px; text-align: right; border: 1px solid #ccc;">
+                            </div>
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+                
+                # Buttons Row
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    # Note: In Streamlit, the button itself triggers the rerun automatically
+                    st.button("RECALCULATE", key="recalc_btn")
+                with btn_col2:
+                    st.download_button(
+                        label="SAVE TAX REPORT",
+                        data=f"ESTIMATED TAX LIABILITY (HANOVER, PA)\nBusiness Profit: ${net_profit:,.2f}...", # Placeholder for full text
+                        file_name=f"Tax_Report_{datetime.date.today()}.txt",
+                        key="save_tax_btn"
+                    )
+
+            # 2. YELLOW REPORT BOX
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Tax Calculations
             se_tax = (net_profit * 0.9235) * 0.153
             fed_inc = max(0, net_profit - (se_tax * 0.5)) * (fed_rate/100)
-            total_tax = se_tax + fed_inc + (net_profit * 0.0307) + (net_profit * (local_rate/100))
-            
-            st.metric("Total Tax Estimate", f"${total_tax:,.2f}")
-            st.metric("Take-Home", f"${net_profit - total_tax:,.2f}")
+            pa_state = net_profit * 0.0307
+            pa_local = net_profit * (local_rate/100)
+            lst = 52.0 if net_profit > 12000 else 0
+            total_tax = se_tax + fed_inc + pa_state + pa_local + lst
+
+            tax_txt = f"ESTIMATED TAX LIABILITY (HANOVER, PA)\n"
+            tax_txt += "="*60 + "\n"
+            tax_txt += f"Report Generated: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            tax_txt += f"Business Profit:  ${net_profit:,.2f}\n"
+            tax_txt += f"{'-'*60}\n"
+            tax_txt += f"Fed SE Tax (15.3%):               ${se_tax:,.2f}\n"
+            tax_txt += f"Fed Income Tax ({fed_rate}%):             ${fed_inc:,.2f}\n"
+            tax_txt += f"PA State Tax (3.07%):               ${pa_state:,.2f}\n"
+            tax_txt += f"Hanover Local EIT ({local_rate}%):           ${pa_local:,.2f}\n"
+            tax_txt += f"PA Local Services Tax (LST):       ${lst:,.2f}\n"
+            tax_txt += "="*60 + "\n"
+            tax_txt += f"TOTAL ESTIMATED TAX DUE:          ${total_tax:,.2f}\n"
+            tax_txt += f"ESTIMATED TAKE-HOME:              ${net_profit - total_tax:,.2f}\n"
+
+            # Render in the stylized yellow box
+            st.markdown(f"""
+                <div style="background-color: #FFFACD; border: 1px solid #ccc; padding: 20px; font-family: 'Courier New', Courier, monospace; color: #4B0082; white-space: pre; border-radius: 5px;">
+{tax_txt}
+                </div>
+            """, unsafe_allow_html=True)
 
     except Exception as e:
         st.error(f"Error: {e}")
