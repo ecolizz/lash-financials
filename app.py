@@ -129,13 +129,36 @@ if sales_file and exp_file and run_btn:
 
         with tab1:
             st.subheader("Profit & Loss Statement")
-            # Scrollable ASCII Box
+            
+            # Start the report string
             rep = f"╔{'═'*42}╦{'═'*17}╦{'═'*12}╗\n"
+            rep += format_line("DESCRIPTION", "AMOUNT ($)", "% OF REV")
+            rep += f"╠{'═'*42}╬{'═'*17}╬{'═'*12}╣\n"
+            
             for row in last_pnl_data:
-                rep += format_line(row[0], f"{row[1]:,.2f}", f"{(row[2]*100):.1f}%")
+                desc = row[0]
+                val = row[1]
+                pct = row[2]
+                
+                # 1. Handle Spacer Rows
+                if desc == "" and val == "":
+                    rep += f"╠{'─'*42}╬{'─'*17}╬{'─'*12}╣\n"
+                
+                # 2. Handle Header Rows (Title only, no amount)
+                elif val == "":
+                    rep += f"║ {desc:<40} ║ {'':>15} ║ {'':>10} ║\n"
+                
+                # 3. Handle Data Rows (Description + Number)
+                else:
+                    # Only apply :.2f if val is a number
+                    fmt_val = f"{val:,.2f}" if isinstance(val, (int, float)) else str(val)
+                    fmt_pct = f"{(pct*100):.1f}%" if isinstance(pct, (int, float)) else str(pct)
+                    rep += format_line(desc, fmt_val, fmt_pct)
+            
             rep += f"╚{'═'*42}╩{'═'*17}╩{'═'*12}╝\n"
             
-            st.code(rep, language=None) # This creates the scrollable box
+            # Display in a scrollable box to prevent cut-off
+            st.code(rep, language=None)
 
             # Download Excel
             output = BytesIO()
