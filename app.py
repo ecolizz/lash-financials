@@ -86,14 +86,43 @@ if sales_file and exp_file and run_btn:
         total_opex = df_exp[~df_exp['Category'].isin(['Back Bar', 'Inventory'])]['Amount'].sum() + processing_fees + tax_collected
         net_profit = total_rev - total_cogs - total_opex
 
-        # 4. DATA FOR P&L DISPLAY
+        # 4. DATA FOR P&L DISPLAY (Expanded to include Expenses)
         last_pnl_data = [
-            ["Net Sales", net_sales, net_sales/total_rev if total_rev else 0],
-            ["Tax Collected", tax_collected, tax_collected/total_rev if total_rev else 0],
-            ["Prepayments", prepayments, prepayments/total_rev if total_rev else 0]
+            ["REVENUE", "", ""],
+            ["  Net Sales", net_sales, net_sales/total_rev if total_rev else 0],
+            ["  Tax Collected", tax_collected, tax_collected/total_rev if total_rev else 0],
+            ["  Prepayments", prepayments, prepayments/total_rev if total_rev else 0]
         ]
-        if include_tips: last_pnl_data.append(["Tips/Gratuity", gratuity, gratuity/total_rev if total_rev else 0])
+        if include_tips: 
+            last_pnl_data.append(["  Tips/Gratuity", gratuity, gratuity/total_rev if total_rev else 0])
+        
         last_pnl_data.append(["TOTAL REVENUE", total_rev, 1.0])
+        last_pnl_data.append(["", "", ""]) # Spacer
+
+        # --- COGS SECTION ---
+        last_pnl_data.append(["COGS", "", ""])
+        cogs_cats = ['Back Bar', 'Inventory']
+        for cat in cogs_cats:
+            amt = df_exp[df_exp['Category'] == cat]['Amount'].sum()
+            if amt > 0:
+                last_pnl_data.append([f"  {cat}", amt, amt/total_rev if total_rev else 0])
+        last_pnl_data.append(["TOTAL COGS", total_cogs, total_cogs/total_rev if total_rev else 0])
+        last_pnl_data.append(["GROSS MARGIN", total_rev - total_cogs, (total_rev - total_cogs)/total_rev if total_rev else 0])
+        last_pnl_data.append(["", "", ""]) # Spacer
+
+        # --- OPERATING EXPENSES SECTION ---
+        last_pnl_data.append(["OPERATING EXPENSES", "", ""])
+        last_pnl_data.append(["  Sales Tax Paid Out", tax_collected, tax_collected/total_rev if total_rev else 0])
+        last_pnl_data.append(["  Processing Fees", processing_fees, processing_fees/total_rev if total_rev else 0])
+        
+        # Group remaining expenses by category
+        opex_only = df_exp[~df_exp['Category'].isin(cogs_cats)]
+        cat_totals = opex_only.groupby('Category')['Amount'].sum().sort_values(ascending=False)
+        for cat, amt in cat_totals.items():
+            last_pnl_data.append([f"  {cat}", amt, amt/total_rev if total_rev else 0])
+            
+        last_pnl_data.append(["TOTAL OPEX", total_opex, total_opex/total_rev if total_rev else 0])
+        last_pnl_data.append(["NET PROFIT", net_profit, net_profit/total_rev if total_rev else 0])
 
         # --- TABS ---
         tab1, tab2, tab3 = st.tabs(["📄 P&L Report", "📊 Analytics", "💰 Tax Estimator"])
